@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+# bevat het MQTT-wachtwoord van ebusd
+loxberry-overname/
+setmode.json

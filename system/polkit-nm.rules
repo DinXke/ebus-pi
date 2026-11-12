@@ -1,0 +1,6 @@
+// /etc/polkit-1/rules.d/50-ebuspi-nm.rules: de dienst beheert wifi en hotspot via NetworkManager
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") == 0 && subject.user == "ebuspi") {
+        return polkit.Result.YES;
+    }
+});

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ebus-pi beheer</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1d232b;--muted:#5d6774;--line:#dde1e6;--acc:#0b6bcb;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--card:#1b2027;--fg:#e6e9ee;--muted:#9aa4b0;--line:#2c333c;--acc:#4ea1ff;--ok:#3fb950;--warn:#d29922;--bad:#f85149}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
+header h1{font-size:17px;margin:0}
+header .sub{color:var(--muted);font-size:13px}
+nav{display:flex;gap:4px;overflow-x:auto;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line)}
+nav button{border:0;background:none;color:var(--muted);padding:8px 12px;border-radius:8px;font:inherit;cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{background:var(--bg);color:var(--fg);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:16px}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:10px}
+.tile .k{color:var(--muted);font-size:12px}.tile .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;word-break:break-word}
+th{color:var(--muted);font-weight:500;font-size:13px}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;max-height:60vh;font-size:12.5px;white-space:pre-wrap}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+label{display:block;font-size:13px;color:var(--muted);margin:8px 0 4px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+button.b{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}
+button.d{color:var(--bad)}
+.alarm{border-left:4px solid var(--bad);padding:8px 10px;margin:6px 0;background:var(--bg);border-radius:6px}
+.alarm.warn{border-color:var(--warn)}
+.muted{color:var(--muted);font-size:13px}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<header><div><h1>ebus-pi</h1><div class="sub" id="hdr">laden…</div></div></header>
+<nav role="tablist" id="tabs">
+  <button data-t="status" aria-selected="true">Status</button>
+  <button data-t="values">Waarden</button>
+  <button data-t="setmode">SetMode</button>
+  <button data-t="wifi">Wifi</button>
+  <button data-t="ebusd">ebusd</button>
+  <button data-t="log">Logboek</button>
+  <button data-t="update">Updates</button>
+  <button data-t="system">Systeem</button>
+</nav>
+<main>
+<section id="status" class="on">
+  <div class="card"><h2>Meldingen</h2><div id="alarms" class="muted">–</div></div>
+  <div class="card"><h2>Ketel</h2><div class="grid" id="tiles"></div></div>
+  <div class="card"><h2>Diensten</h2><table id="svc"></table></div>
+</section>
+
+<section id="values">
+  <div class="card"><h2>Laatste waarden</h2><p class="muted">Uit het geheugen; Status01, druk en status worden om de 10 s gelezen, wat Loxone vraagt blijft vers.</p>
+  <table id="vals"></table>
+  <div class="row"><input id="rname" placeholder="bv. FlowTemp" style="max-width:240px"><button class="b" onclick="readOne()">Nu lezen</button><span id="rres" class="muted"></span></div></div>
+</section>
+
+<section id="setmode">
+  <div class="card"><h2>SetMode naar de ketel</h2><table id="sm"></table>
+  <div class="row"><label style="margin:0"><input type="checkbox" id="smdry" style="width:auto"> proefmodus (niets schrijven)</label></div>
+  <label>Herhaling (s)</label><input id="smrep" type="number" min="10" max="600" style="max-width:140px">
+  <div class="row"><button class="b p" onclick="saveSm()">Bewaren</button><button class="b" onclick="post('/api/setmode',{write_now:true}).then(load)">Nu opnieuw schrijven</button></div></div>
+</section>
+
+<section id="wifi">
+  <div class="card"><h2>Verbinding</h2><div id="netst" class="muted">–</div></div>
+  <div class="card"><h2>Bewaarde netwerken</h2><table id="saved"></table></div>
+  <div class="card"><h2>Netwerk toevoegen</h2>
+    <div class="row"><button class="b" onclick="scan()">Zoeken</button><span id="scanst" class="muted"></span></div>
+    <table id="scan"></table>
+    <label>Naam (SSID)</label><input id="ssid" autocomplete="off">
+    <label>Wachtwoord</label><input id="wpw" type="password" autocomplete="new-password">
+    <label>IP-adres (leeg = automatisch/DHCP), bv. 192.168.255.3/24</label><input id="wip">
+    <label>Gateway</label><input id="wgw"><label>DNS</label><input id="wdns">
+    <div class="row"><button class="b p" onclick="addWifi()">Bewaren en verbinden</button></div>
+    <p class="muted">Op de hotspot valt de verbinding even weg tijdens het verbinden; lukt het niet, dan komt de hotspot na een minuut terug.</p>
+  </div>
+</section>
+
+<section id="ebusd">
+  <div class="card"><h2>ebusd</h2><table id="einfo"></table></div>
+  <div class="card"><h2>Opties (/etc/default/ebusd)</h2>
+    <p class="muted">Het MQTT-wachtwoord staat apart in /etc/ebuspi/ebusd.env en verschijnt hier niet.</p>
+    <textarea id="opts" rows="4"></textarea>
+    <div class="row"><button class="b p" onclick="saveOpts()">Bewaren en ebusd herstarten</button></div></div>
+</section>
+
+<section id="log">
+  <div class="card"><div class="row" style="margin-top:0">
+    <select id="lsrc" style="max-width:240px" onchange="loadLog()"><option value="ebuspi">ebus-pi</option><option value="ebusd">ebusd-log</option><option value="ebusd-journal">ebusd (systemd)</option><option value="system">netwerk</option></select>
+    <button class="b" onclick="loadLog()">Vernieuwen</button></div>
+  <pre id="ltext">–</pre></div>
+</section>
+
+<section id="update">
+  <div class="card"><h2>ebus-pi bijwerken</h2><table id="upd"></table>
+    <div class="row"><button class="b" onclick="post('/api/update/check',{}).then(load)">Nu controleren</button><button class="b p" onclick="installUpd()">Installeren</button></div></div>
+  <div class="card"><h2>Instellingen</h2>
+    <label>Bron</label><select id="usrc"><option value="github">GitHub-releases</option><option value="url">Adres (bv. Flux)</option></select>
+    <label>GitHub-repo</label><input id="urepo">
+    <label>Token (enkel voor een privé repo)</label><input id="utok" type="password" autocomplete="new-password">
+    <label>Adres (bron 'adres')</label><input id="uurl">
+    <div class="row"><label style="margin:0"><input type="checkbox" id="uauto" style="width:auto"> automatisch installeren</label></div>
+    <div class="row"><button class="b p" onclick="saveUpd()">Bewaren</button></div></div>
+  <div class="card"><h2>ebusd</h2><p class="muted">ebusd wordt nooit automatisch bijgewerkt (een nieuwe versie kan de ketelconfig anders lezen).</p>
+    <button class="b" onclick="upgEbusd()">ebusd bijwerken naar de nieuwste release</button><pre id="upgout" style="display:none"></pre></div>
+</section>
+
+<section id="system">
+  <div class="card"><h2>Herstarten</h2><div class="row">
+    <button class="b" onclick="restart('ebusd')">ebusd</button><button class="b" onclick="restart('ebuspi')">deze dienst</button><button class="b d" onclick="restart('pi')">de Pi</button></div></div>
+  <div class="card"><h2>Beheer via Flux (tunnel)</h2><div id="tunst" class="muted"></div>
+    <label>Adres</label><input id="turl" placeholder="http://10.10.30.182:8000/api/ebuspi/tunnel">
+    <label>Token</label><input id="ttok" type="password" autocomplete="new-password">
+    <div class="row"><label style="margin:0"><input type="checkbox" id="ton" style="width:auto"> aan</label><button class="b p" onclick="saveTun()">Bewaren</button></div>
+    <p class="muted">Werkt alles ook zonder Flux? Ja: de tunnel is enkel extra. Het lokale beheer blijft altijd bereikbaar.</p></div>
+  <div class="card"><h2>SD-kaart sparen</h2><p class="muted">Alleen-lezen systeem (overlay): niets schrijft nog naar de kaart, ook geen instellingen. Eerst uitzetten om iets blijvend te wijzigen. Vraagt een herstart.</p>
+    <div class="row"><span id="ovl"></span><button class="b" onclick="ovl(true)">Aanzetten</button><button class="b" onclick="ovl(false)">Uitzetten</button></div></div>
+</section>
+</main>
+<div id="toast" role="status"></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let tab=location.hash.slice(1)||'status', S={};
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',4000)}
+async function get(u){const r=await fetch(location.origin+u,{cache:'no-store'});return r.json()}
+async function post(u,d){const r=await fetch(location.origin+u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});const j=await r.json().catch(()=>({}));if(!r.ok||j.error)toast(j.error||('fout '+r.status));return j}
+function show(t){tab=t;document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id===t));document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));history.replaceState(null,'','#'+t);load()}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
+const rows=o=>Object.entries(o).map(([k,v])=>`<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('');
+const fmt=(v,u='',d=1)=>v==null?'–':(+v).toFixed(d)+u;
+const ago=t=>t?Math.round(Date.now()/1000-t)+' s geleden':'–';
+const cls=b=>b?'ok':'bad';
+async function load(){
+  S=await get('/api/status');
+  $('hdr').textContent=`versie ${S.version} · ebusd ${S.ebusd} · bus ${S.signal||'–'} · ${S.network&&S.network.hotspot?'HOTSPOT actief':'online'}`;
+  if(tab==='status'){
+    $('alarms').innerHTML=S.alarms.length?S.alarms.map(a=>`<div class="alarm ${a.level}">${esc(a.text)}</div>`).join(''):'<span class="ok">Geen meldingen</span>';
+    const t=[['Aanvoer',fmt(S.flow,' °C')],['Retour',fmt(S.return,' °C')],['Warm water',fmt(S.dhw,' °C')],['Boiler',fmt(S.storage,' °C')],['Waterdruk',fmt(S.pressure,' bar',2)],['Status',S.statenumber??'–'],['Pomp',S.pump==null?'–':(S.pump?'aan':'uit')],['SetMode',esc(S.setmode.serialized)]];
+    $('tiles').innerHTML=t.map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+    $('svc').innerHTML=rows({
+      'ebusd':`<span class="${cls(S.ebusd==='ok')}">${esc(S.ebusd_service)} / ${esc(S.ebusd)}</span>`,
+      'bussignaal':`<span class="${cls((S.signal||'').startsWith('acquired'))}">${esc(S.signal||'–')}</span>`,
+      'adapter':`<span class="${cls(S.adapter)}">${S.adapter?'aanwezig':'niet gevonden'}</span>`,
+      'MQTT':S.mqtt.enabled?`<span class="${cls(S.mqtt.connected)}">${S.mqtt.connected?'verbonden':esc(S.mqtt.error||'niet verbonden')}</span> · ${esc(S.mqtt.topic)}`:'uit',
+      'Modbus':S.modbus.enabled?`${S.modbus.clients} verbonden · ${S.modbus.requests} verzoeken`:'uit',
+      'Loxone-lezingen':`${S.cache_hits} uit geheugen · ${S.reads} van de bus`,
+      'tunnel':S.tunnel.enabled?(S.tunnel.connected?'<span class="ok">verbonden</span>':`<span class="bad">${esc(S.tunnel.error||'niet verbonden')}</span>`):'uit',
+      'watchdog-herstarts (1 u)':S.watchdog_restarts,'actief sinds':Math.round(S.uptime_s/60)+' min'});
+  }
+  if(tab==='values') $('vals').innerHTML='<tr><th>naam</th><th>waarde</th><th>leeftijd</th><th>fout</th></tr>'+Object.entries(S.values).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v.raw)}</td><td>${v.age_s??'–'} s</td><td class="bad">${esc(v.error||'')}</td></tr>`).join('');
+  if(tab==='setmode'){const m=S.setmode_full;$('sm').innerHTML=rows({waarden:esc(JSON.stringify(m.values)),'op de bus':esc(m.serialized),klaar:m.ready?'ja':'wacht op '+esc(m.missing.join(', ')),'laatst geschreven':esc(m.last_written||'–')+' · '+ago(m.last_write_at),resultaat:`<span class="${cls(m.last_ok)}">${esc(m.last_result||'–')}</span>`,'geschreven / overgeslagen':m.writes+' / '+m.skipped});$('smdry').checked=m.dry_run;$('smrep').value=m.repeat_s}
+  if(tab==='wifi'){const w=await get('/api/wifi');const n=w.net||{};$('netst').innerHTML=(n.uplink||[]).map(u=>`${esc(u.device)}: ${esc(u.connection)}`).join('<br>')||'<span class="bad">geen verbinding</span>';if(n.hotspot)$('netst').innerHTML+=`<br>Hotspot <b>${esc(n.hotspot_ssid)}</b> actief`;$('saved').innerHTML=w.saved.map(s=>`<tr><td>${esc(s.name)}${s.active?' <span class="ok">(actief)</span>':''}</td><td><button class="b d" onclick="delWifi('${esc(s.name)}')">Wissen</button></td></tr>`).join('')||'<tr><td class="muted">geen</td></tr>'}
+  if(tab==='ebusd'){$('einfo').innerHTML=rows(Object.fromEntries(Object.entries(S.ebusd_info).map(([k,v])=>[k,esc(v)])));if(!$('opts').dataset.l){const o=await get('/api/ebusd/opts');$('opts').value=o.opts;$('opts').dataset.l=1}}
+  if(tab==='log') loadLog();
+  if(tab==='update'){const u=S.update,l=u.latest||{};$('upd').innerHTML=rows({'deze versie':esc(u.version),'nieuwste':l.version?esc(l.version)+(l.newer?' <b>(nieuwer)</b>':' (up-to-date)'):'–','gecontroleerd':ago(u.checked_at),fout:`<span class="bad">${esc(u.error)}</span>`});if(!$('urepo').dataset.l){$('usrc').value=u.source;$('urepo').value=u.repo||'';$('uurl').value=u.url||'';$('uauto').checked=!!u.auto;$('utok').placeholder=u.token_set?'(ingesteld)':'';$('urepo').dataset.l=1}}
+  if(tab==='system'){const t=S.tunnel;$('tunst').innerHTML=t.enabled?(t.connected?'<span class="ok">verbonden</span>':'<span class="bad">'+esc(t.error||'niet verbonden')+'</span>'):'uit';$('ovl').textContent='nu: '+S.overlay;if(!$('turl').dataset.l){$('turl').value=t.url||'';$('ton').checked=t.enabled;$('turl').dataset.l=1}}
+}
+async function loadLog(){const r=await get('/api/log?src='+$('lsrc').value+'&n=300');$('ltext').textContent=r.text||'(leeg)';$('ltext').scrollTop=1e9}
+async function readOne(){$('rres').textContent='…';const r=await get('/api/read?name='+encodeURIComponent($('rname').value));$('rres').textContent=r.result||r.error}
+function saveSm(){post('/api/setmode',{dry_run:$('smdry').checked,repeat_s:+$('smrep').value}).then(()=>{toast('Bewaard');load()})}
+async function scan(){$('scanst').textContent='zoeken…';const r=await get('/api/wifi/scan');$('scanst').textContent='';$('scan').innerHTML=r.networks.map(n=>`<tr><td><a href="#wifi" onclick="$('ssid').value=this.textContent;return false">${esc(n.ssid)}</a></td><td>${n.signal}%</td><td>${esc(n.security)}</td></tr>`).join('')}
+function addWifi(){const st=$('wip').value?{address:$('wip').value,gateway:$('wgw').value,dns:$('wdns').value}:null;post('/api/wifi/add',{ssid:$('ssid').value,password:$('wpw').value,static:st}).then(r=>{if(r.ok){$('wpw').value='';toast('Bewaard, bezig met verbinden…')}})}
+function delWifi(n){if(confirm('Netwerk '+n+' wissen?'))post('/api/wifi/delete',{name:n}).then(load)}
+function saveOpts(){if(confirm('Opties bewaren en ebusd herstarten?'))post('/api/ebusd/opts',{opts:$('opts').value}).then(r=>r.ok&&toast('ebusd herstart'))}
+function restart(w){if(confirm('Herstart '+w+'?'))post('/api/restart',{what:w}).then(()=>toast('Herstart gevraagd'))}
+function installUpd(){if(confirm('Update installeren? De dienst herstart; mislukt de start, dan komt de vorige versie terug.'))post('/api/update/install',{}).then(r=>toast(r.note||r.error))}
+function saveUpd(){const d={source:$('usrc').value,repo:$('urepo').value,url:$('uurl').value,auto:$('uauto').checked};if($('utok').value)d.token=$('utok').value;post('/api/update/settings',d).then(()=>{$('utok').value='';toast('Bewaard')})}
+function saveTun(){const d={enabled:$('ton').checked,url:$('turl').value};if($('ttok').value)d.token=$('ttok').value;post('/api/tunnel/settings',d).then(()=>{$('ttok').value='';toast('Bewaard')})}
+async function upgEbusd(){if(!confirm('ebusd bijwerken? ebusd herstart; de ketel is even niet bereikbaar.'))return;$('upgout').style.display='block';$('upgout').textContent='bezig (kan een paar minuten duren)…';const r=await post('/api/ebusd/upgrade',{});$('upgout').textContent=r.output||r.error}
+function ovl(on){if(confirm((on?'Alleen-lezen aanzetten':'Alleen-lezen uitzetten')+'? Herstart van de Pi nodig.'))post('/api/overlay',{on}).then(r=>toast(r.ok?'Klaar, herstart de Pi':r.output))}
+show(tab);setInterval(()=>{if(['status','values','setmode'].includes(tab))load()},5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# /etc/sudoers.d/ebuspi: de dienst mag enkel de helper met zijn vaste opdrachten draaien
+ebuspi ALL=(root) NOPASSWD: /usr/local/sbin/ebuspi-helper

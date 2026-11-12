@@ -1,0 +1,24 @@
+{
+  "http": {
+    "user": "ebusberry",
+    "password_hash": "(gemaakt door install.sh)"
+  },
+  "mqtt": {
+    "host": "10.10.30.182",
+    "port": 1883,
+    "user": "ebusd",
+    "password": "(gezet door install.sh/migrate)"
+  },
+  "setmode": {
+    "dry_run": false,
+    "repeat_s": 60
+  },
+  "modbus": {
+    "enabled": true,
+    "allow": ["192.168.255.2", "127.0.0.1"]
+  },
+  "network": {
+    "hotspot_ssid": "ebus-pi",
+    "hotspot_password": "(minstens 8 tekens, gezet door install.sh)"
+  }
+}

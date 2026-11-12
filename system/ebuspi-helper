@@ -1,0 +1,90 @@
+#!/bin/bash
+# ebus-pi: root-helper met een vaste lijst opdrachten (via sudo vanuit de dienst 'ebuspi').
+set -euo pipefail
+
+CAPTIVE=/etc/NetworkManager/dnsmasq-shared.d/ebuspi-captive.conf
+DEFAULTS=/etc/default/ebusd
+BASE=/opt/ebuspi
+
+log() { logger -t ebuspi-helper -- "$*"; echo "$*"; }
+
+case "${1:-}" in
+restart-ebusd)
+	systemctl restart ebusd
+	;;
+restart-ebuspi)
+	systemctl restart ebuspi
+	;;
+reboot)
+	log "herstart gevraagd via het beheer"
+	systemctl reboot
+	;;
+set-ebusd-opts)
+	# nieuwe opties op stdin (één regel, zonder wachtwoord; gecontroleerd in de dienst én hier)
+	IFS= read -r OPTS
+	if [[ ! "$OPTS" =~ ^[A-Za-z0-9\ =_.,:/*+@-]+$ ]] || [[ "$OPTS" == *mqttpass* ]]; then
+		echo "ongeldige opties" >&2; exit 2
+	fi
+	cp -a "$DEFAULTS" "$DEFAULTS.vorige" 2>/dev/null || true
+	if grep -q '^EBUSD_OPTS=' "$DEFAULTS" 2>/dev/null; then
+		sed -i "s|^EBUSD_OPTS=.*|EBUSD_OPTS=\"$OPTS\"|" "$DEFAULTS"
+	else
+		echo "EBUSD_OPTS=\"$OPTS\"" >> "$DEFAULTS"
+	fi
+	log "ebusd-opties gewijzigd"
+	systemctl restart ebusd
+	;;
+captive)
+	if [ "${2:-}" = "on" ] && [[ "${3:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		mkdir -p "$(dirname "$CAPTIVE")"
+		printf '# ebus-pi: alle namen naar het beheer zolang er geen netwerk is\naddress=/#/%s\n' "$3" > "$CAPTIVE"
+	else
+		rm -f "$CAPTIVE"
+	fi
+	;;
+overlay)
+	# alleen-lezen rootfs (Raspberry Pi OS overlayfs); werkt na een herstart
+	case "${2:-}" in
+	on)  raspi-config nonint enable_overlayfs ;;
+	off) raspi-config nonint disable_overlayfs ;;
+	*)   echo "on|off" >&2; exit 2 ;;
+	esac
+	;;
+upgrade-ebusd)
+	# nieuwste ebusd-release van GitHub (zelfde werkwijze als de LoxBerry-plugin 1.1.4)
+	/opt/ebuspi/current/system/install-ebusd.sh
+	systemctl restart ebusd
+	;;
+install-release)
+	# $2 = /var/lib/ebuspi/updates/ebus-pi-<versie>.tar.gz
+	TAR="${2:-}"
+	[[ "$TAR" =~ ^/var/lib/ebuspi/updates/ebus-pi-[0-9.]+\.tar\.gz$ ]] && [ -f "$TAR" ] || { echo "ongeldig pakket" >&2; exit 2; }
+	VER="$(basename "$TAR" .tar.gz)"; VER="${VER#ebus-pi-}"
+	NEW="$BASE/releases/$VER"
+	PREV="$(readlink -f "$BASE/current" || true)"
+	rm -rf "$NEW.tmp"; mkdir -p "$NEW.tmp"
+	tar -xzf "$TAR" -C "$NEW.tmp" --no-same-owner
+	[ -f "$NEW.tmp/ebuspi/__init__.py" ] || { echo "pakket zonder ebuspi/" >&2; rm -rf "$NEW.tmp"; exit 2; }
+	# zelftest: alles moet importeren
+	(cd "$NEW.tmp" && python3 -c "import ebuspi.app, ebuspi.web, ebuspi.modbus") || { echo "zelftest faalde" >&2; rm -rf "$NEW.tmp"; exit 3; }
+	rm -rf "$NEW"; mv "$NEW.tmp" "$NEW"
+	chown -R root:root "$NEW"
+	ln -sfn "$NEW" "$BASE/current.new" && mv -Tf "$BASE/current.new" "$BASE/current"
+	log "update naar $VER: herstarten"
+	# start in de achtergrond (deze helper is een kind van de dienst zelf)
+	systemd-run --unit=ebuspi-update-check --quiet --collect /bin/bash -c "
+		sleep 2; systemctl restart ebuspi; sleep 60
+		if ! systemctl is-active --quiet ebuspi || ! curl -s -o /dev/null --max-time 5 http://127.0.0.1/ ; then
+			logger -t ebuspi-helper 'update $VER start niet: terug naar $PREV'
+			ln -sfn '$PREV' '$BASE/current.new' && mv -Tf '$BASE/current.new' '$BASE/current'
+			systemctl restart ebuspi
+		else
+			logger -t ebuspi-helper 'update $VER actief'
+			ls -1dt $BASE/releases/*/ | tail -n +4 | xargs -r rm -rf
+		fi"
+	;;
+*)
+	echo "gebruik: $0 restart-ebusd|restart-ebuspi|reboot|set-ebusd-opts|captive on IP|captive off|overlay on|off|upgrade-ebusd|install-release PAD" >&2
+	exit 2
+	;;
+esac

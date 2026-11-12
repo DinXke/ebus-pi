@@ -1,0 +1,22 @@
+[Unit]
+Description=ebus-pi (Loxone-adressen van de LoxBerry-ebusd-plugin, Modbus, beheer, wifi-hotspot)
+After=network.target ebusd.service NetworkManager.service
+Wants=ebusd.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=ebuspi
+Group=ebuspi
+WorkingDirectory=/opt/ebuspi/current
+Environment=PYTHONPATH=/opt/ebuspi/current PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m ebuspi run
+# poort 80 (Loxone) en 502 (Modbus) zonder root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+StateDirectory=ebuspi
+WatchdogSec=90
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

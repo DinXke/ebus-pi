@@ -1,0 +1,2 @@
+# eBUS-adapter (USB-serieel) ingeplugd: ebusd opnieuw starten zodat hij de poort meteen weer opent
+ACTION=="add", SUBSYSTEM=="tty", KERNEL=="ttyUSB0", RUN+="/bin/systemctl --no-block restart ebusd"
