@@ -157,11 +157,20 @@ Wat in het Loxone-project naar de LoxBerry (192.168.255.3) verwijst:
 |---|---|---|
 | VirtualHttpIn "ebud read", VirtualOut "ebusd SetMode" en "ebusd hex" | ebusd-plugin | **ebus-pi** (deze repo) |
 | **VirtualUdpIn "Netatmo"** (bron 192.168.255.3, poort 5005): zithoek-temperatuur, CO2, vochtigheid, geluid van station "Anja en Björn" | LoxBerry-**Netatmo-plugin**, stuurt UDP naar de Miniserver | **valt weg, bewust** (Netatmo-waarden zijn niet meer nodig in Loxone). Verwijder na de overstap de VirtualUdpIn "Netatmo" uit Loxone Config, of laat hem staan: hij krijgt gewoon niets meer binnen |
-| Miniserver-gebruiker "Loxberry" | plugins die waarden in Loxone zetten (bv. de Buienradar-ingangen?) | nakijken met de pluginlijst |
+| Miniserver-gebruiker "Loxberry" | gebruikt door plugins die waarden in Loxone zetten | geen van de plugins op .3 doet dat nog (zie hieronder) |
 
-"Loxberry MQTT-Gateway" in het project wijst naar **192.168.255.4**: dat is een ander toestel en valt buiten deze overstap.
+"Loxberry MQTT-Gateway" en de https2http-URL (Weatherflow) in het project wijzen naar **192.168.255.4**: dat is een ander toestel en valt buiten deze overstap.
 
-**Te bevestigen:** de volledige pluginlijst. `collect-loxberry.sh` toont ze; anders staat ze in de LoxBerry onder *Plugin-beheer*.
+Pluginlijst van de LoxBerry op .3 (nagekeken op 12/11/2026):
+
+| Plugin | Versie | Na de overstap |
+|---|---|---|
+| eBUSd plugin | 1.1.4 | **ebus-pi** |
+| Netatmo-Weather | 2.0.7 | valt bewust weg (zie hierboven) |
+| Marstek Venus E | 1.1.34 | valt weg zonder gevolg: er zijn geen toestellen ingesteld en MQTT staat uit. De batterijwaarden in Loxone komen via de MQTT-Gateway op .4, en FLUX stuurt de batterijen rechtstreeks. |
+| https2http | 2023.08.10 | valt weg zonder gevolg: Loxone gebruikt de https2http op .4, niet die op .3 |
+
+In de crontab van de gebruiker `loxberry` staat nog `ebus-fastpoll.sh` (bij het opstarten en elke 15 min), maar dat script bestaat niet meer. ebus-pi doet dat snel uitlezen zelf: Status01, WaterPressure en Statenumber elke 10 s.
 
 ## Beheer via Flux (optioneel)
 
