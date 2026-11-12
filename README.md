@@ -24,12 +24,13 @@ Alles werkt **zonder Flux**. MQTT is enkel uitvoer, en de tunnel naar Flux is op
 Het pad is altijd `/admin/plugins/ebusdplugin/api/ebusd/`, met HTTP Basic auth (gebruiker `ebusberry`, wachtwoord zoals
 in de Loxone-URL's, enkel lokaal bewaard als hash).
 
-**SetMode:** de GitLab-versie van de plugin schrijft een zelf gedefinieerd `SetModeOverride`. Op de echte LoxBerry
-bestaat dat bericht niet (`ERR: element not found`). Wat er wel op de bus staat, is het gewone bericht `SetMode`
-uit de ketelconfig (`vaillant/08.bai.csv`, `uw,bai,SetMode,…,08,b510,00`). De laatste waarde was
-`auto;30.0;45.0;65;0;0;0;0;0;0`, en de ketel nam die over (`FlowTempDesired` = 30.00). ebus-pi schrijft daarom
-`SetMode` met dezelfde tien velden, als gehele getallen zoals de plugin (`(int)` in PHP), en `hcmode` als naam
-(`auto`). De variant met `SetModeOverride` kan nog via de config (`setmode.message`, `define`, `trailing_semicolon`).
+**SetMode:** de plugin schrijft `SetModeOverride`, en dat doet ebus-pi ook. Dat bericht staat in de ketelconfig van
+ebusd (`hcmode.inc`, `wi,bai,SetModeOverride,…,08,B510,00`). Een `read` erop geeft `element not found` omdat het
+enkel schrijfbaar is. Wat ebusd als `SetMode` toont (`uw,bai,SetMode`, bv. `auto;30.0;45.0;65;0;0;0;0;0;0`), is de
+passieve decodering van datzelfde bericht op de bus: in ebusd 26.1 kan je daar niet naar schrijven. ebus-pi schrijft
+de tien velden als gehele getallen zoals de plugin (`(int)` in PHP), maar **zonder** `;` op het einde: ebusd 26.1
+geeft anders `invalid numeric argument`. Instelbaar via `setmode.message`, `define`, `trailing_semicolon` en
+`hcmode_names`.
 
 ## Verbeteringen tegenover de LoxBerry
 

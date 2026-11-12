@@ -91,19 +91,21 @@ class FakeBoiler:
                 self._tick()
                 return self.vals.get(name, "ERR: element not found")
             if cmd == "write":
+                # ebusd 26.1 + hcmode.inc: SetModeOverride is schrijfbaar (wi), SetMode enkel passief (uw)
                 name, value = parts[-2], parts[-1]
-                if name not in ("SetMode",) and name not in self.defined:
+                if name != "SetModeOverride" and name not in self.defined:
                     return "ERR: element not found"
-                f = value.rstrip(";").split(";")
+                f = value.split(";")
                 if len(f) != 10:
                     return "ERR: invalid position"
+                try:
+                    nums = [float(x) for x in f]
+                except ValueError:
+                    return "ERR: invalid numeric argument"
                 self.writes.append((name, value))
-                if name == "SetMode":
-                    self.vals["SetMode"] = value
-                    try:
-                        self.vals["FlowTempDesired"] = f"{float(f[1]):.2f}"
-                    except ValueError:
-                        pass
+                hc = {0: "auto", 1: "off", 2: "water"}.get(int(nums[0]), str(int(nums[0])))
+                self.vals["SetMode"] = f"{hc};{nums[1]:.1f};{nums[2]:.1f};{int(nums[3])};" + ";".join(f[4:])
+                self.vals["FlowTempDesired"] = f"{nums[1]:.2f}"
                 return "done"
             if cmd == "hex":
                 self.hexes.append(parts[-1])

@@ -79,7 +79,7 @@ def test_setmode_zoals_loxone(app, boiler):
     assert boiler.writes == []                                                 # nog niet alle drie gekend
     http(app, PLUGIN + "setmode.php", b'{ "hwctempdesired": 50.5 }')
     http(app, PLUGIN + "setmode.php", b'{ "hwcflowtempdesired": 65.0 }')
-    assert boiler.writes == [("SetMode", "auto;45;50;65;0;0;0;0;0;0")]         # (int) zoals PHP
+    assert boiler.writes == [("SetModeOverride", "0;45;50;65;0;0;0;0;0;0")]         # (int) zoals PHP
 
 
 def test_setmode_enkel_bij_wijziging_en_herhaling(app, boiler):
@@ -90,7 +90,7 @@ def test_setmode_enkel_bij_wijziging_en_herhaling(app, boiler):
         http(app, PLUGIN + "setmode.php", b'{ "flowtempdesired": 45.0 }')
     assert len(boiler.writes) == 1
     http(app, PLUGIN + "setmode.php", b'{ "flowtempdesired": 47.0 }')
-    assert boiler.writes[-1] == ("SetMode", "auto;47;50;65;0;0;0;0;0;0")
+    assert boiler.writes[-1] == ("SetModeOverride", "0;47;50;65;0;0;0;0;0;0")
     app.clock.tick(61)
     app.setmode.flush()                                                         # vaste herhaling
     assert len(boiler.writes) == 3

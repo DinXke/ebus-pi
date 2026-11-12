@@ -39,15 +39,16 @@ DEFAULTS = {
     },
     "setmode": {
         "enabled": True,
-        # De ketelconfig van ebusd (vaillant/08.bai.csv, hcmode.inc) kent SetMode al als schrijfbericht
-        # ("uw,bai,SetMode,..,08,b510,00"); dat is ook wat er nu op de bus staat. De GitLab-versie van de plugin
-        # schrijft een zelf gedefinieerd SetModeOverride (met --enabledefine); dat kan hier ook:
-        # message "SetModeOverride", define = de definitie hieronder in DEFINE_OVERRIDE, trailing_semicolon true.
-        "message": "SetMode",
+        # Zoals de LoxBerry: schrijven naar SetModeOverride uit de ketelconfig (hcmode.inc:
+        # "wi,bai,SetModeOverride,..,08,B510,00"). SetMode zelf ("uw,bai,SetMode") is in ebusd 26.1 enkel passief:
+        # het is de decodering van datzelfde B510 00-bericht op de bus, schrijven geeft "element not found".
+        # ebusd 26.1 wil tien getallen zonder afsluitende ';' (anders "invalid numeric argument").
+        # Kent de ketelconfig SetModeOverride niet: define = DEFINE_OVERRIDE (hieronder) en ebusd met --enabledefine.
+        "message": "SetModeOverride",
         "define": "",
         "trailing_semicolon": False,
-        # hcmode als naam uit de ketelconfig (0=auto;1=off;2=water); leeg = als getal
-        "hcmode_names": {"0": "auto", "1": "off", "2": "water"},
+        # hcmode als naam vertalen (bv. {"0": "auto"}) enkel voor een bericht dat namen verwacht; leeg = als getal
+        "hcmode_names": {},
         # de ketel valt terug zonder SetMode: vaste herhaling, ook als Loxone niets nieuws stuurt
         "repeat_s": 60,
         # pas schrijven als Loxone de drie temperaturen minstens één keer gaf (geen oude standaardwaarden op de bus)

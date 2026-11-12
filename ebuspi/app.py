@@ -417,7 +417,8 @@ def seed_setmode(cfg, host=None, port=8888, value=None):
         print(f"niet gelezen: {raw}")
         return 1
     parts = raw.split(";")
-    names = {v: int(k) for k, v in (c.get("hcmode_names") or {}).items()}
+    names = {"auto": 0, "off": 1, "water": 2}           # zoals ebusd SetMode toont
+    names.update({v: int(k) for k, v in (c.get("hcmode_names") or {}).items()})
     data = {}
     for k, v in zip(FIELDS, parts):
         data[k] = names.get(v, v)

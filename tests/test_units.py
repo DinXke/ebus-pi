@@ -43,15 +43,15 @@ def test_serialize():
 
 def test_setmode_override_met_define(boiler, client, tmp_path):
     from ebuspi.config import DEFINE_OVERRIDE
-    sm = SetMode({"message": "SetModeOverride", "define": DEFINE_OVERRIDE, "trailing_semicolon": True,
+    sm = SetMode({"message": "SetModeOverride", "define": DEFINE_OVERRIDE, "trailing_semicolon": False,
                   "hcmode_names": {}, "require": [], "repeat_s": 60, "state_file": ""}, client, clock=Clock())
     sm.update({"flowtempdesired": 40})
     assert any(c.startswith("define -r wi,bai,SetModeOverride") for c in boiler.commands)
-    assert boiler.writes == [("SetModeOverride", "0;40;0;0;0;0;0;0;0;0;")]
+    assert boiler.writes == [("SetModeOverride", "0;40;0;0;0;0;0;0;0;0")]
 
 
 def test_setmode_onthoudt_na_herstart(boiler, client, tmp_path):
-    cfg = {"message": "SetMode", "define": "", "hcmode_names": {"0": "auto"}, "repeat_s": 60,
+    cfg = {"message": "SetModeOverride", "define": "", "hcmode_names": {}, "repeat_s": 60,
            "require": ["flowtempdesired", "hwctempdesired", "hwcflowtempdesired"],
            "state_file": str(tmp_path / "sm.json")}
     sm = SetMode(cfg, client, clock=Clock())
@@ -145,7 +145,7 @@ def test_modbus_naar_setmode_en_pomp(app, boiler):
     # aanvoer 45,0 / ww 50,0 / ww-aanvoer 65,0 in één keer (FC16)
     r = req(1, bytes([16, 0, 0, 0, 3, 6]) + struct.pack(">hhh", 450, 500, 650))
     assert r[0] == 16
-    assert boiler.writes == [("SetMode", "auto;45;50;65;0;0;0;0;0;0")]
+    assert boiler.writes == [("SetModeOverride", "0;45;50;65;0;0;0;0;0;0")]
     req(2, bytes([6, 0, 7, 0, 1]))                                             # circulatiepomp aan
     assert boiler.hexes == ["08B512020064"]
     app.store.read_fresh("Status01")
@@ -178,8 +178,8 @@ def test_checks(boiler, client):
     from ebuspi.values import Store
     clock = Clock()
     st = Store(client, {"retries": 1, "max_age_s": 30}, {}, clock=clock)
-    sm = SetMode({"message": "SetMode", "define": "", "require": [], "repeat_s": 60, "state_file": "",
-                  "hcmode_names": {"0": "auto"}}, client, clock=clock)
+    sm = SetMode({"message": "SetModeOverride", "define": "", "require": [], "repeat_s": 60, "state_file": "",
+                  "hcmode_names": {}}, client, clock=clock)
     info = {"signal": "acquired"}
     ch = Checks({"pressure_warn": 1.0, "pressure_alarm": 0.8}, st, sm, lambda: info, clock=clock)
     boiler.vals["WaterPressure"] = "0.75;ok"
@@ -406,3 +406,25 @@ def test_oude_loxberry_adres_toont_beheer(app):
     st, body, _ = h(app, "/admin/system/index.cgi")
     assert st == 200 and "<html" in body.lower()
     assert h(app, "/admin/system/index.cgi", auth=None)[0] == 401
+
+
+def test_setmode_zoals_ebusd_26(app, boiler):
+    """Standaard: SetModeOverride, tien getallen zonder ';' op het einde; SetMode zelf is passief."""
+    from conftest import PLUGIN as P
+    from conftest import http as h
+    from ebuspi.config import DEFAULTS
+    assert DEFAULTS["setmode"]["message"] == "SetModeOverride" and DEFAULTS["setmode"]["hcmode_names"] == {}
+    assert boiler.handle("write -c bai SetMode auto;30;45;65;0;0;0;0;0;0") == "ERR: element not found"
+    assert boiler.handle("write -c bai SetModeOverride 0;30;45;65;0;0;0;0;0;0;").startswith("ERR")
+    for f, v in (("flowtempdesired", 41.7), ("hwctempdesired", 50), ("hwcflowtempdesired", 65)):
+        h(app, P + "setmode.php", json.dumps({f: v}).encode())
+    assert boiler.writes[-1] == ("SetModeOverride", "0;41;50;65;0;0;0;0;0;0")
+    assert app.setmode.status()["last_ok"]
+    assert boiler.vals["SetMode"].startswith("auto;41.0;50.0;65")                # wat ebusd daarna toont
+
+
+def test_lege_hcmode_names_blijft_leeg(tmp_path):
+    from ebuspi.config import Config
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"setmode": {"hcmode_names": {}}}))
+    assert Config(path=str(p)).section("setmode")["hcmode_names"] == {}

@@ -1,9 +1,9 @@
 """SetMode naar de ketel, zoals de LoxBerry-plugin het opbouwt.
 
 Plugin (SetModeStorage.php): tien velden, elk als geheel getal (PHP `(int)`, dus afgekapt), gescheiden en
-afgesloten met ';', geschreven met `ebusctl write -c bai SetModeOverride "<velden>"`. Op de echte LoxBerry
-bestaat SetModeOverride niet en staat SetMode op de bus (bv. "auto;30.0;45.0;65;0;0;0;0;0;0"): standaard
-schrijven we dus SetMode met dezelfde waarden, hcmode als naam en zonder afsluitende ';'.
+afgesloten met ';', geschreven met `ebusctl write -c bai SetModeOverride "<velden>"`. ebus-pi schrijft
+hetzelfde bericht, maar zonder afsluitende ';' (ebusd 26.1: "invalid numeric argument"). Wat ebusd daarna als
+"SetMode" toont (bv. "auto;30.0;45.0;65;0;0;0;0;0;0") is de passieve decodering van datzelfde bericht.
 
 Verschil met de plugin: niet bij elke POST van Loxone schrijven (die herhaalt elke 60 s per veld), maar enkel
 bij een wijziging en daarnaast met een vaste herhaling, want zonder SetMode valt de ketel terug.
