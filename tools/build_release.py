@@ -27,7 +27,7 @@ def main():
     with open(out, "wb") as f:
         f.write(data)
     sha = hashlib.sha256(data).hexdigest()
-    with open(out + ".sha256", "w") as f:
+    with open(out + ".sha256", "w", newline="\n") as f:
         f.write(f"{sha}  {os.path.basename(out)}\n")
     print(out, sha)
 
