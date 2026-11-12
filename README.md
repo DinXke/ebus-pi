@@ -156,7 +156,7 @@ Wat in het Loxone-project naar de LoxBerry (192.168.255.3) verwijst:
 | Loxone-object | Wat | Na de overstap |
 |---|---|---|
 | VirtualHttpIn "ebud read", VirtualOut "ebusd SetMode" en "ebusd hex" | ebusd-plugin | **ebus-pi** (deze repo) |
-| **VirtualUdpIn "Netatmo"** (bron 192.168.255.3, poort 5005): zithoek-temperatuur, CO2, vochtigheid, geluid van station "Anja en Björn" | LoxBerry-**Netatmo-plugin**, stuurt UDP naar de Miniserver | **valt weg.** Nog in te bouwen: een Netatmo-module in ebus-pi die dezelfde UDP-regels vanaf .3 stuurt (de OAuth-token zit in de pluginconfig die `collect-loxberry.sh` meeneemt) |
+| **VirtualUdpIn "Netatmo"** (bron 192.168.255.3, poort 5005): zithoek-temperatuur, CO2, vochtigheid, geluid van station "Anja en Björn" | LoxBerry-**Netatmo-plugin**, stuurt UDP naar de Miniserver | **valt weg, bewust** (Netatmo-waarden zijn niet meer nodig in Loxone). Verwijder na de overstap de VirtualUdpIn "Netatmo" uit Loxone Config, of laat hem staan: hij krijgt gewoon niets meer binnen |
 | Miniserver-gebruiker "Loxberry" | plugins die waarden in Loxone zetten (bv. de Buienradar-ingangen?) | nakijken met de pluginlijst |
 
 "Loxberry MQTT-Gateway" in het project wijst naar **192.168.255.4**: dat is een ander toestel en valt buiten deze overstap.

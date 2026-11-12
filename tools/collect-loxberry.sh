@@ -5,7 +5,7 @@
 #   bash tools/collect-loxberry.sh [loxberry@192.168.255.3] [doelmap]
 #
 # Resultaat (standaard ./loxberry-overname, NIET in git: bevat het MQTT-wachtwoord):
-#   ebusd-etc.tgz   /etc/ebusd + /etc/default/ebusd (+ pluginlijst en pluginconfig, bv. Netatmo)
+#   ebusd-etc.tgz   /etc/ebusd + /etc/default/ebusd (+ pluginlijst en pluginconfig)
 #   setmode.txt     huidige SetMode van de ketel (bv. auto;30.0;45.0;65;0;0;0;0;0;0)
 #   ebusd-info.txt  ebusd 'info' (versie, adapter, ketel-ID)
 # Kopieer de map naar de bootpartitie van de nieuwe SD-kaart (bootfs/loxberry-overname).
