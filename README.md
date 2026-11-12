@@ -63,7 +63,7 @@ geeft anders `invalid numeric argument`. Instelbaar via `setmode.message`, `defi
 
 ## Modbus TCP (optioneel, naast HTTP)
 
-Poort 502, unit-ID 1, enkel voor de Miniserver: `192.168.255.2` en `10.10.10.164`, het adres waarvan Loxone de HTTP-verzoeken echt doet (instelbaar). Registers zijn signed 16-bit. `-32768` betekent
+Poort 502, unit-ID 1, enkel voor de Miniserver `192.168.255.2` (instelbaar). Registers zijn signed 16-bit. `-32768` betekent
 "geen waarde": zet in Loxone het geldige bereik zodat je die waarde negeert.
 
 **Inputregisters (functie 4, alleen lezen)**
