@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from . import VERSION, phpjson
+from .clients import basic_user
 from .config import public
 
 log = logging.getLogger("ebuspi.web")
@@ -180,12 +181,16 @@ class Handler(BaseHTTPRequestHandler):
             if self._captive(path):
                 return
             if path.startswith(PLUGIN):
+                ip, user = self.client_address[0], basic_user(self.headers.get("Authorization", ""))
                 if not self._auth(admin=False):
+                    self.app.clients.record(ip, False, user)
                     return self.unauthorized("LoxBerry")
+                self.app.clients.record(ip, True, user, path[len(PLUGIN):])
                 return self._plugin(method, path[len(PLUGIN):], u.query)
             if not self._auth(admin=True):
                 return self.unauthorized("ebus-pi")
-            if path in ("/", "/index.html"):
+            # browsers onthielden de 301 van de LoxBerry ("/" -> /admin/system/index.cgi): daar ook het beheer
+            if path in ("/", "/index.html") or (path.startswith("/admin/") and path.endswith(".cgi")):
                 with open(os.path.join(STATIC, "admin.html"), "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             if path.startswith("/api/"):

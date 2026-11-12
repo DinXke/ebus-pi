@@ -90,7 +90,7 @@ DEFAULTS = {
         "port": 502,
         "unit_id": 1,
         # enkel deze adressen mogen verbinden (leeg = iedereen); Modbus heeft geen wachtwoord
-        "allow": ["192.168.255.2", "127.0.0.1"],
+        "allow": ["192.168.255.2", "10.10.10.164", "127.0.0.1"],
         # circulatiepomp aan/uit zoals de Loxone-uitgang "ebusd hex"
         "pump_hex_on": "08B512020064",
         "pump_hex_off": "08B512020000",
@@ -126,6 +126,10 @@ DEFAULTS = {
         "setpoint_tolerance": 1.0,
         "slow_s": 120,
         "alarm_topic": "ebusd/ebuspi/alarm",
+        "loxone_silence_s": 300,         # 0 = uit
+        "loxone_denied_window_s": 600,
+        "scan_address": "08",            # ketel; ebus-pi stuurt `scan 08` als ebusd hem niet kent
+        "scan_retry_s": 600,
     },
     "update": {
         "check": True,

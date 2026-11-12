@@ -10,6 +10,7 @@ import time
 
 from . import VERSION
 from .checks import Checks
+from .clients import ClientWatch
 from .config import Config
 from .ebusd import EbusdClient
 from .modbus import ModbusServer, to_reg
@@ -66,7 +67,10 @@ class App:
         self.setmode = SetMode(c["setmode"], self.client, clock=clock)
         self.mqtt = MqttStatus(c["mqtt"])
         self.net = NetWatch(c["network"], self.wifi, self.system, clock=clock) if c["network"]["enabled"] else None
-        self.checks = Checks(c["checks"], self.store, self.setmode, lambda: self.ebusd_info, clock=clock)
+        self.clients = ClientWatch(clock=clock)
+        self.checks = Checks(c["checks"], self.store, self.setmode, lambda: self.ebusd_info, clock=clock,
+                             clients=self.clients)
+        self.last_scan = None
         self.updater = Updater(cfg, self.system, clock=clock)
         self.tunnel = Tunnel(cfg, int(c["http"]["port"]), clock=clock)
         self.modbus = None
@@ -169,6 +173,8 @@ class App:
             "pressure": self.store.number("WaterPressure"), "statenumber": self.store.number("Statenumber"),
             "alarms": self.checks.status(),
             "watchdog_restarts": len([t for t in self.restarts if self.clock() - t < 3600]),
+            "loxone_last_ok_s": (round(self.clock() - self.clients.last_ok())
+                                 if self.clients.last_ok() else None),
         }
         if full:
             h.update({
@@ -180,6 +186,7 @@ class App:
                            "requests": getattr(self.modbus, "requests", 0)},
                 "udp": {"enabled": self.cfg.section("loxone_udp")["enabled"], "sent": self.udp.sent},
                 "update": self.updater.status(), "tunnel": self.tunnel.status(),
+                "loxone": self.clients.status(), "last_scan": self.last_scan,
                 "last_hex": self.last_hex, "pump_cmd": self.pump, "overlay": self.system.overlay_state(),
             })
         return h
@@ -208,6 +215,29 @@ class App:
             return True
         return False
 
+    def scan_step(self):
+        """Kent ebusd de ketel niet (na een start vindt de eerste scan hem soms niet): zelf `scan 08` sturen."""
+        c = self.cfg.section("checks")
+        addr = str(c.get("scan_address") or "")
+        msgs = self.cfg.section("poll").get("messages") or []
+        info = self.ebusd_info
+        if not addr or not msgs or not str(info.get("signal", "")).startswith("acquired"):
+            return False
+        v = self.store.get(msgs[0]) or {}
+        if "not found" not in str(v.get("err") or "") or (v.get("at") and v["at"] > v.get("err_at", 0)):
+            return False
+        now = self.clock()
+        if self.last_scan and now - self.last_scan["at"] < float(c.get("scan_retry_s", 600)):
+            return False
+        try:
+            res = self.client.command(f"scan {addr}").strip()
+        except Exception as ex:              # noqa: BLE001
+            res = f"ERR: {ex}"
+        log.warning("ebusd kent %s niet: scan %s -> %s", msgs[0], addr, res[:200])
+        self.last_scan = {"at": now, "address": addr, "result": res[:200]}
+        self.setmode.defined = False
+        return True
+
     def maintenance(self):
         """Elke 15 s: ebusd-info, watchdog, SetMode-herhaling, MQTT-status, systemd-watchdog."""
         last_mqtt = 0.0
@@ -215,6 +245,7 @@ class App:
             try:
                 self.refresh_info()
                 self.watchdog_step()
+                self.scan_step()
                 self.setmode.flush()
                 if self.cfg.section("checks").get("enabled", True):
                     new, gone = self.checks.step()

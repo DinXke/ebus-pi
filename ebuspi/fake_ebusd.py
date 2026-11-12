@@ -27,6 +27,7 @@ class FakeBoiler:
             "SetMode": "auto;30.0;45.0;65;0;0;0;0;0;0", "CirPump": "off",
         }
         self.defined = set()
+        self.unscanned = False                # zoals na een start waarbij de eerste scan de ketel miste
 
     def _tick(self):
         """Eenvoudig ketelmodel: aanvoer volgt het SetMode-setpoint, brander pendelt, boiler warmt op/koelt af."""
@@ -85,6 +86,8 @@ class FakeBoiler:
                     self.fail_next -= 1
                     return "ERR: read timeout"
                 name = parts[-1]
+                if self.unscanned:
+                    return "ERR: element not found"
                 self._tick()
                 return self.vals.get(name, "ERR: element not found")
             if cmd == "write":
@@ -111,6 +114,9 @@ class FakeBoiler:
                 d = parts[-1].split(",")
                 self.defined.add(d[2])
                 return "done"
+            if cmd == "scan":
+                self.unscanned = False
+                return "08;Vaillant;BAI00;0104;7803"
             if cmd == "find":
                 return "\n".join(f"bai {k} = {v.split(';')[0]}" for k, v in sorted(self.vals.items()))
             return "ERR: command not found"

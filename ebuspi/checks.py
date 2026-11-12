@@ -1,5 +1,7 @@
 """Controles op de ketel: storing, waterdruk, sensoren, SetMode aanvaard, bus.
 
+Ook: krijgt Loxone 401, of komt Loxone al te lang niet meer langs (clients.py).
+
 Elke controle geeft een lijst actieve meldingen {"code", "level" (warn|alarm), "text"}.
 Nieuwe of verdwenen meldingen worden gelogd en (via app) op MQTT gezet.
 """
@@ -12,11 +14,12 @@ SENSOR_MSGS = ["FlowTemp", "StorageTemp", "WaterPressure"]
 
 
 class Checks:
-    def __init__(self, cfg, store, setmode, app_info, clock=time.time):
+    def __init__(self, cfg, store, setmode, app_info, clock=time.time, clients=None):
         self.cfg = cfg                 # dict 'checks'
         self.store, self.setmode = store, setmode
         self.app_info = app_info       # functie → ebusd info-dict
         self.clock = clock
+        self.clients = clients         # ClientWatch: Loxone-verzoeken
         self.active = {}               # code -> melding (met "since")
         self.last_slow = 0.0
 
@@ -65,6 +68,9 @@ class Checks:
                 and abs(int(want) - have) > float(c.get("setpoint_tolerance", 1.0)) and int(want) > 0:
             found.append({"code": "setmode", "level": "warn",
                           "text": f"ketel gebruikt {have:.0f} °C aanvoer, gevraagd {int(want)} °C"})
+
+        if self.clients is not None:
+            found += self.clients.findings(c)
         return found
 
     def step(self):

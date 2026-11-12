@@ -56,6 +56,7 @@ button.d{color:var(--bad)}
   <div class="card"><h2>Meldingen</h2><div id="alarms" class="muted">–</div></div>
   <div class="card"><h2>Ketel</h2><div class="grid" id="tiles"></div></div>
   <div class="card"><h2>Diensten</h2><table id="svc"></table></div>
+  <div class="card"><h2>Loxone</h2><table id="lox"></table></div>
 </section>
 
 <section id="values">
@@ -157,6 +158,8 @@ async function load(){
       'Loxone-lezingen':`${S.cache_hits} uit geheugen · ${S.reads} van de bus`,
       'tunnel':S.tunnel.enabled?(S.tunnel.connected?'<span class="ok">verbonden</span>':`<span class="bad">${esc(S.tunnel.error||'niet verbonden')}</span>`):'uit',
       'watchdog-herstarts (1 u)':S.watchdog_restarts,'actief sinds':Math.round(S.uptime_s/60)+' min'});
+    const s0=v=>v==null?'–':v<120?v+' s geleden':Math.round(v/60)+' min geleden';
+    $('lox').innerHTML=S.loxone.length?'<tr><th>adres</th><th>gebruiker</th><th>laatst gelukt</th><th>geweigerd (401)</th><th>laatst gevraagd</th></tr>'+S.loxone.map(c=>`<tr><td>${esc(c.ip)}</td><td>${esc(c.user||'–')}</td><td class="${cls(c.last_ok_ago_s!=null&&c.last_ok_ago_s<300)}">${s0(c.last_ok_ago_s)}</td><td class="${c.first_denied_ago_s!=null?'bad':''}">${c.denied}${c.denied?' · '+s0(c.last_denied_ago_s)+' · '+esc(c.denied_user||'–'):''}</td><td>${esc(c.last_what||'–')}</td></tr>`).join(''):'<tr><td class="muted">Nog geen verzoeken van Loxone sinds de start</td></tr>';
   }
   if(tab==='values') $('vals').innerHTML='<tr><th>naam</th><th>waarde</th><th>leeftijd</th><th>fout</th></tr>'+Object.entries(S.values).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v.raw)}</td><td>${v.age_s??'–'} s</td><td class="bad">${esc(v.error||'')}</td></tr>`).join('');
   if(tab==='setmode'){const m=S.setmode_full;$('sm').innerHTML=rows({waarden:esc(JSON.stringify(m.values)),'op de bus':esc(m.serialized),klaar:m.ready?'ja':'wacht op '+esc(m.missing.join(', ')),'laatst geschreven':esc(m.last_written||'–')+' · '+ago(m.last_write_at),resultaat:`<span class="${cls(m.last_ok)}">${esc(m.last_result||'–')}</span>`,'geschreven / overgeslagen':m.writes+' / '+m.skipped});$('smdry').checked=m.dry_run;$('smrep').value=m.repeat_s}

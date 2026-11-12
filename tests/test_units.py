@@ -163,8 +163,12 @@ def test_modbus_allowlist(boiler, tmp_path):
     a.start()
     try:
         s = socket.create_connection(("127.0.0.1", a.modbus.server_address[1]), timeout=3)
-        s.sendall(struct.pack(">HHHB", 1, 0, 6, 1) + bytes([4, 0, 0, 0, 1]))
-        assert s.recv(10) == b""                                               # verbinding gesloten
+        try:
+            s.sendall(struct.pack(">HHHB", 1, 0, 6, 1) + bytes([4, 0, 0, 0, 1]))
+            got = s.recv(10)
+        except ConnectionError:                                                # Windows: afgebroken i.p.v. gesloten
+            got = b""
+        assert got == b""                                                      # verbinding gesloten, geen antwoord
     finally:
         a.shutdown()
 
@@ -331,6 +335,7 @@ def test_tunnel_voert_verzoek_lokaal_uit(app):
     import base64
     from ebuspi.tunnel import Tunnel
     t = Tunnel(app.cfg, app.port)
+    app.refresh_info()                    # niet wachten op de eerste onderhoudsronde
     tok = "Basic " + base64.b64encode(b"ebusberry:geheim").decode()
     r = t.local({"method": "GET", "path": "/api/status", "headers": {"Authorization": tok}})
     assert r["status"] == 200 and json.loads(base64.b64decode(r["body_b64"]))["ebusd"] == "ok"
@@ -351,3 +356,53 @@ def test_beheer_api(app):
     assert st == 200 and "ebus-pi" in body
     st, body, _ = http(app, "/api/ebusd/opts", json.dumps({"opts": "--a; reboot"}).encode())
     assert st == 500 or "ongeldig" in body
+
+
+# ---------------------------------------------------------------- Loxone-bewaking en ketelscan
+def test_loxone_401_en_stilte(app):
+    from conftest import PLUGIN as P
+    from conftest import http as h
+    h(app, P + "read.php?circuit=bai&update[]=FlowTemp", auth=("ebusberry", "fout"))
+    h(app, P + "read.php?circuit=bai&update[]=FlowTemp", auth=("ebusberry", "fout"))
+    st = app.clients.status()[0]
+    assert st["ip"] == "127.0.0.1" and st["denied"] == 2 and st["user"] == "ebusberry"
+    assert "fout" not in str(app.clients.status())                       # nooit het wachtwoord
+    codes = {f["code"]: f for f in app.clients.findings({})}
+    assert codes["loxone-401-127.0.0.1"]["level"] == "alarm"
+    assert "ebusberry" in codes["loxone-401-127.0.0.1"]["text"]
+    h(app, P + "read.php?circuit=bai&update[]=FlowTemp")                   # weer gelukt: melding weg
+    assert not [f for f in app.clients.findings({}) if f["code"].startswith("loxone-401")]
+    assert app.health()["loxone_last_ok_s"] == 0
+    app.clock.tick(301)
+    assert [f["code"] for f in app.clients.findings({})] == ["loxone-stil"]
+
+
+def test_loxone_stil_na_start_zonder_verzoeken(boiler, tmp_path):
+    from conftest import make_app
+    a = make_app(boiler, tmp_path)
+    assert a.clients.findings({}) == []                                    # nog binnen de aanloop
+    a.clock.tick(300)
+    assert [f["code"] for f in a.clients.findings({})] == ["loxone-stil"]
+    assert a.clients.findings({"loxone_silence_s": 0}) == []
+    assert "loxone-stil" in [f["code"] for f in a.checks.evaluate()]
+
+
+def test_ketelscan_als_ebusd_de_ketel_niet_kent(boiler, tmp_path):
+    from conftest import make_app
+    a = make_app(boiler, tmp_path)
+    boiler.unscanned = True
+    a.refresh_info()
+    a.store.poll_once()
+    assert a.scan_step() is True and "scan 08" in boiler.commands
+    assert a.scan_step() is False                                         # niet opnieuw binnen scan_retry_s
+    a.store.poll_once()
+    assert a.store.get("Status01")["raw"].startswith("26.0")
+    a.clock.tick(700)
+    assert a.scan_step() is False                                         # ketel weer gekend: geen scan meer
+
+
+def test_oude_loxberry_adres_toont_beheer(app):
+    from conftest import http as h
+    st, body, _ = h(app, "/admin/system/index.cgi")
+    assert st == 200 and "<html" in body.lower()
+    assert h(app, "/admin/system/index.cgi", auth=None)[0] == 401

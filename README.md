@@ -51,13 +51,18 @@ uit de ketelconfig (`vaillant/08.bai.csv`, `uw,bai,SetMode,…,08,b510,00`). De 
   - waterdruk (< 1,0 bar waarschuwing, < 0,8 bar alarm, > 2,8 bar);
   - een defecte sensor;
   - de ketel die het gevraagde aanvoersetpoint negeert;
-  - geen bussignaal of ebusd weg.
+  - geen bussignaal of ebusd weg;
+  - **Loxone krijgt 401** (gebruiker of wachtwoord klopt niet; de gebruikersnaam wordt getoond, het wachtwoord nooit);
+  - **Loxone komt niet meer langs:** al 5 min geen geslaagd verzoek op de plugin-adressen (`checks.loxone_silence_s`, 0 = uit).
+- **Loxone-bewaking:** per bron-IP het laatste geslaagde verzoek, het aantal 401's en de gebruikersnaam. Dat staat in het beheer (Status → Loxone) en in `/api/status` (`loxone`, `loxone_last_ok_s`), dus ook via Flux.
+- **Ketel niet gevonden na een start:** soms vindt de eerste ebusd-scan de ketel niet ("Status01 not found"). ebus-pi stuurt dan zelf `scan 08`, hoogstens om de 10 min.
+- **Oude LoxBerry-adressen:** browsers onthouden de doorverwijzing van de LoxBerry naar `/admin/system/index.cgi`. Daar, en op elk ander `/admin/….cgi`, toont ebus-pi gewoon het beheer.
 - **Gezondheid op MQTT:** `ebusd/ebuspi/status` (retained JSON, `{"state":"offline"}` als testament).
 - **Actueel OS:** Raspberry Pi OS 64-bit met automatische beveiligingsupdates, in plaats van Raspbian 11.
 
 ## Modbus TCP (optioneel, naast HTTP)
 
-Poort 502, unit-ID 1, enkel voor `192.168.255.2` (instelbaar). Registers zijn signed 16-bit. `-32768` betekent
+Poort 502, unit-ID 1, enkel voor de Miniserver: `192.168.255.2` en `10.10.10.164`, het adres waarvan Loxone de HTTP-verzoeken echt doet (instelbaar). Registers zijn signed 16-bit. `-32768` betekent
 "geen waarde": zet in Loxone het geldige bereik zodat je die waarde negeert.
 
 **Inputregisters (functie 4, alleen lezen)**
