@@ -17,7 +17,7 @@ mkdir -p "$OUT"
 
 echo "== ebusd-config en pluginlijst ophalen via SSH (wachtwoord van $FROM)"
 ssh -o StrictHostKeyChecking=accept-new "$FROM" \
-	"tar -C / -czf - etc/ebusd etc/default/ebusd \$(ls -d opt/loxberry/data/system/plugindatabase.json* opt/loxberry/config/plugins 2>/dev/null) 2>/dev/null" \
+	"cd / && tar -czf - etc/ebusd etc/default/ebusd \$(ls -d opt/loxberry/data/system/plugindatabase.json* opt/loxberry/config/plugins 2>/dev/null) 2>/dev/null" \
 	> "$OUT/ebusd-etc.tgz"
 echo "   $(tar -tzf "$OUT/ebusd-etc.tgz" | wc -l) bestanden"
 
@@ -45,6 +45,6 @@ PY
 
 echo "== pluginlijst"
 tar -xzOf "$OUT/ebusd-etc.tgz" opt/loxberry/data/system/plugindatabase.json 2>/dev/null \
-	| "$PY" -c "import json,sys; d=json.load(sys.stdin); [print('  -', p.get('title') or p.get('name'), p.get('version','')) for p in (d.get('plugins') or {}).values()]" \
+	| "$PY" -c "import json,sys; d=json.load(sys.stdin); [print('  -', p.get('title') or p.get('name'), p.get('version','')) for p in (d.get('plugins') or {}).values()]" 2>/dev/null \
 	|| echo "   (niet gevonden; kijk in de LoxBerry onder Plugin-beheer)"
 echo "Klaar: $OUT"
